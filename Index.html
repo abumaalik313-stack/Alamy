@@ -1,0 +1,72 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Auto QR Scanner</title>
+<link rel="stylesheet" href="styles.css">
+
+<main>
+<h1>Auto QR Scanner</h1>
+<div id="camera-container">
+<video id="video" autoplay="" playsinline=""></video>
+<canvas id="canvas" hidden=""></canvas>
+<div id="overlay"><p id="status">Initializing...</p><p id="result"
+class="hidden"></p></div>
+</div>
+<div id="controls">
+<button id="startBtn">Start</button><button id="stopBtn" disabled="">Stop</
+button>
+<label>Upload: <input id="fileInput" type="file" accept="image/*"></label>
+</div>
+<div id="log"></div>
+<footer><small>Camera requires HTTPS or localhost.</small></footer>
+</main>
+<script src="https://unpkg.com/jsqr/dist/jsQR.js"></script>
+<script>
+const
+v=document.getElementById('video'),c=document.getElementById('canvas'),x=
+c.getContext('2d'),
+s=document.getElementById('status'),r=document.getElementById('result'),l=d
+ocument.getElementById('log'),
+start=document.getElementById('startBtn'),stop=document.getElementById('st
+opBtn'),f=document.getElementById('fileInput');
+let st=null,scan=false,last=null,cool=false;
+function log(m,cl){const
+p=document.createElement('div');p.textContent=m;if(cl)p.className=cl;l.prepe
+nd(p);}
+async function startCam(){try{st=await
+navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+v.srcObject=st;await
+v.play();scan=true;start.disabled=true;stop.disabled=false;s.textContent='Scan
+ning...';tick();}
+catch(e){s.textContent='Camera error: '+e.message;}}
+function stopCam(){scan=false;start.disabled=false;stop.disabled=true;if(st)
+{st.getTracks().forEach(t=>t.stop());st=null;}s.textContent='Stopped.';}
+function tick(){if(!scan)return;if(v.readyState===v.HAVE_ENOUGH_DATA)
+{c.width=v.videoWidth;c.height=v.videoHeight;x.drawImage(v,0,0,c.width,c.heig
+ht);
+const d=x.getImageData(0,0,c.width,c.height);const
+code=jsQR(d.data,c.width,c.height);if(code){handleQR(code.data);}}
+requestAnimationFrame(tick);}
+function handleQR(t){if(!
+t)return;if(last===t&&cool)return;last=t;cool=true;setTimeout(()=>cool=false,30
+00);s.textContent='QR: '+t.slice(0,80);
+r.textContent=t;r.classList.remove('hidden');send(t);}
+async function send(t){try{const res=await fetch('save_scan.php',
+{method:'POST',headers:{'Content-Type':'application/
+json'},body:JSON.stringify({qr_text:t})});
+const j=await res.json();if(j.status==='ok')
+{s.textContent='Saved';log('Saved:'+t,'success');}
+else if(j.status==='exists')
+{s.textContent='Duplicate';log('Duplicate: '+t,'warning');}
+else{log('Error:'+JSON.stringify(j),'error');}}catch(e){log('Net
+error:'+e.message,'error');}}
+f.addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;const
+reader=new FileReader();
+reader.onload=ev=>{const img=new
+Image();img.onload=()=>{c.width=img.width;c.height=img.height;x.drawImage(
+img,0,0);
+const d=x.getImageData(0,0,c.width,c.height);const
+code=jsQR(d.data,c.width,c.height);if(code){handleQR(code.data);}else log('No
+QR found','warning');};
+img.src=ev.target.result;};reader.readAsDataURL(file);});
+start.addEventListener('click',startCam);stop.addEventListener('click',stopCam);
+</script>
